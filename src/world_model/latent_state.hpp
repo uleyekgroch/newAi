@@ -29,6 +29,12 @@ public:
     [[nodiscard]] State encode(const Observation& obs) const;
     [[nodiscard]] Tensor decode(const State& state) const;
 
+    // Online learning: update encoder weights via reconstruction loss
+    // Returns reconstruction loss for this observation
+    Real learn(const Observation& obs, Real learning_rate = 0.001);
+    [[nodiscard]] Real total_reconstruction_loss() const { return total_recon_loss_; }
+    [[nodiscard]] std::size_t learn_count() const { return learn_count_; }
+
     [[nodiscard]] Dim input_dim() const { return config_.input_dim; }
     [[nodiscard]] Dim latent_dim() const { return config_.latent_dim; }
     [[nodiscard]] Dim num_heads() const { return config_.num_heads; }
@@ -68,6 +74,9 @@ private:
     std::vector<Real> dec_w2_;  // input_dim × hidden_dim
     std::vector<Real> dec_b2_;
 
+    Real total_recon_loss_ = 0.0;
+    std::size_t learn_count_ = 0;
+
     static Real gelu(Real x);
     static Real layer_norm_scale(const std::vector<Real>& v);
     void apply_layer_norm(std::vector<Real>& v) const;
@@ -82,6 +91,12 @@ private:
                         const AttentionLayer& layer) const;
     // Softmax over a segment of a vector
     static void softmax(std::vector<Real>& v, Dim start, Dim len);
+
+    // Backprop helpers for online learning
+    void update_weights(std::vector<Real>& w, const std::vector<Real>& grad,
+                        Dim size, Real lr);
+    void update_bias(std::vector<Real>& b, const std::vector<Real>& grad,
+                     Dim size, Real lr);
 };
 
 } // namespace uik::world_model

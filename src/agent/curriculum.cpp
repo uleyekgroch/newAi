@@ -118,52 +118,105 @@ void CurriculumManager::build_environments() {
 
 void CurriculumManager::generate_next_stage() {
     ++generated_count_;
-    // Procedurally increase difficulty parameters
-    std::uniform_int_distribution<int> env_type(0, 2);  // grid / arc / physics
-    int type = env_type(rng_);
 
-    // Scale difficulty with generation count
+    // Structural variation: cycle through diverse task structures
+    // Not just parameter scaling — different task compositions
+    std::size_t structure_type = generated_count_ % 7;  // 7 different structures
     std::size_t difficulty = generated_count_;
-    int grid_size = static_cast<int>(std::min(Dim{3} + difficulty, Dim{30}));
-    int num_colors = static_cast<int>(std::min(Dim{5} + difficulty, Dim{30}));
-    std::size_t max_steps = 100 + difficulty * 50;
-    Real pass_threshold = std::min(0.3 + 0.05 * static_cast<Real>(difficulty), 0.9);
+    unsigned stage_seed = config_.seed + static_cast<unsigned>(generated_count_);
 
+    int grid_size = static_cast<int>(std::min(Dim{3} + difficulty / 2, Dim{15}));
+    int num_colors = static_cast<int>(std::min(Dim{5} + difficulty / 3, Dim{20}));
+    std::size_t max_steps = 100 + difficulty * 30;
+    Real pass_threshold = std::min(0.3 + 0.03 * static_cast<Real>(difficulty), 0.85);
     std::string stage_name = "gen_" + std::to_string(generated_count_);
 
-    switch (type) {
+    switch (structure_type) {
         case 0: {
-            stage_name += "_grid_" + std::to_string(grid_size);
-            GridWorld::Config gc;
-            gc.rows = static_cast<Dim>(grid_size);
-            gc.cols = static_cast<Dim>(grid_size);
-            gc.num_colors = num_colors;
-            gc.max_steps = max_steps;
-            gc.seed = config_.seed + static_cast<unsigned>(generated_count_);
-            envs_.push_back(std::make_unique<GridWorld>(gc));
-            break;
-        }
-        case 1: {
-            stage_name += "_arc_" + std::to_string(grid_size);
+            // Small grid, high color diversity (abstract pattern matching)
+            stage_name += "_abstract_" + std::to_string(num_colors);
             ArcEnvironment::Config ac;
-            ac.grid_rows = static_cast<Dim>(grid_size);
-            ac.grid_cols = static_cast<Dim>(grid_size);
+            ac.grid_rows = 3; ac.grid_cols = 3;
             ac.num_colors = num_colors;
-            ac.puzzles_per_episode = std::min(difficulty + 3, std::size_t{20});
-            ac.seed = config_.seed + static_cast<unsigned>(generated_count_);
+            ac.puzzles_per_episode = std::min(difficulty + 3, std::size_t{15});
+            ac.seed = stage_seed;
             auto env = std::make_unique<ArcEnvironment>(ac);
-            // Use benchmark tasks for generated ARC stages
             env->use_benchmark_tasks();
             envs_.push_back(std::move(env));
             break;
         }
-        default: {
-            stage_name += "_physics_" + std::to_string(difficulty);
+        case 1: {
+            // Large grid, few colors (spatial reasoning)
+            stage_name += "_spatial_" + std::to_string(grid_size);
+            ArcEnvironment::Config ac;
+            ac.grid_rows = static_cast<Dim>(grid_size);
+            ac.grid_cols = static_cast<Dim>(grid_size);
+            ac.num_colors = 3;
+            ac.puzzles_per_episode = std::min(difficulty + 2, std::size_t{10});
+            ac.seed = stage_seed;
+            envs_.push_back(std::make_unique<ArcEnvironment>(ac));
+            break;
+        }
+        case 2: {
+            // Multi-object physics with increasing complexity
+            stage_name += "_physics_multi_" + std::to_string(difficulty);
             PhysicsEnvironment::Config pc;
-            pc.max_objects = static_cast<int>(std::min(difficulty + 2, std::size_t{20}));
-            pc.gravity = -0.1 * static_cast<Real>(difficulty);
+            pc.max_objects = static_cast<int>(std::min(difficulty + 3, std::size_t{15}));
+            pc.gravity = -0.05 * static_cast<Real>(1 + difficulty % 5);
+            pc.friction = 0.01 * static_cast<Real>(difficulty);
             pc.max_steps = max_steps;
-            pc.seed = config_.seed + static_cast<unsigned>(generated_count_);
+            pc.seed = stage_seed;
+            envs_.push_back(std::make_unique<PhysicsEnvironment>(pc));
+            break;
+        }
+        case 3: {
+            // Grid world with tight constraints (navigation)
+            stage_name += "_maze_" + std::to_string(grid_size);
+            GridWorld::Config gc;
+            gc.rows = static_cast<Dim>(grid_size);
+            gc.cols = static_cast<Dim>(grid_size);
+            gc.num_colors = 3;  // sparse, forces precise navigation
+            gc.max_steps = max_steps / 2;  // tighter budget
+            gc.seed = stage_seed;
+            envs_.push_back(std::make_unique<GridWorld>(gc));
+            pass_threshold *= 1.2;
+            break;
+        }
+        case 4: {
+            // ARC with benchmark tasks (real patterns)
+            stage_name += "_arc_bench_" + std::to_string(difficulty);
+            ArcEnvironment::Config ac;
+            ac.grid_rows = static_cast<Dim>(std::min(grid_size, 10));
+            ac.grid_cols = static_cast<Dim>(std::min(grid_size, 10));
+            ac.num_colors = num_colors;
+            ac.puzzles_per_episode = std::min(difficulty + 5, std::size_t{20});
+            ac.seed = stage_seed;
+            auto env = std::make_unique<ArcEnvironment>(ac);
+            env->use_benchmark_tasks();
+            envs_.push_back(std::move(env));
+            break;
+        }
+        case 5: {
+            // Non-square grid (rectangular, tests generalization)
+            stage_name += "_rect_" + std::to_string(grid_size);
+            ArcEnvironment::Config ac;
+            ac.grid_rows = static_cast<Dim>(std::max(grid_size / 2, 2));
+            ac.grid_cols = static_cast<Dim>(grid_size);
+            ac.num_colors = num_colors;
+            ac.puzzles_per_episode = std::min(difficulty + 2, std::size_t{10});
+            ac.seed = stage_seed;
+            envs_.push_back(std::make_unique<ArcEnvironment>(ac));
+            break;
+        }
+        default: {
+            // Extreme physics (high gravity, many objects, chaotic)
+            stage_name += "_chaos_" + std::to_string(difficulty);
+            PhysicsEnvironment::Config pc;
+            pc.max_objects = static_cast<int>(std::min(difficulty * 2, std::size_t{20}));
+            pc.gravity = -0.3;
+            pc.friction = 0.0;  // frictionless = harder
+            pc.max_steps = max_steps * 2;
+            pc.seed = stage_seed;
             envs_.push_back(std::make_unique<PhysicsEnvironment>(pc));
             break;
         }
