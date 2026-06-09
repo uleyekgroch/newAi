@@ -12,10 +12,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
-# GCC 12 emits a spurious -Warray-bounds false positive in Release builds
-# when inlining std::vector copy through Tensor. Suppress it globally.
+# GCC 12 emits spurious -Warray-bounds and -Wstringop-overflow false positives
+# in Release builds when inlining std::vector copy through Tensor value types.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "13")
-    add_compile_options(-Wno-array-bounds)
+    add_compile_options(-Wno-array-bounds -Wno-stringop-overflow)
 endif()
 
 # ── Library: core kernel ──
