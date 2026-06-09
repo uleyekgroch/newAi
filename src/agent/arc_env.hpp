@@ -70,6 +70,11 @@ private:
     Puzzle generate_symmetry_puzzle();              // mirror to make symmetric
     Puzzle generate_count_and_fill_puzzle();        // count objects → fill output
     Puzzle generate_gravity_puzzle();               // objects fall down
+    Puzzle generate_crop_nonzero_puzzle();            // crop to bounding box of nonzero
+    Puzzle generate_upscale_puzzle();                 // 2× upscale each cell
+    Puzzle generate_denoise_puzzle();                 // remove isolated noise cells
+    Puzzle generate_flood_fill_puzzle();              // flood fill from a seed
+    Puzzle generate_diagonal_puzzle();                // extract/fill diagonal
 
 public:
     // Use built-in ARC-AGI benchmark tasks instead of random ones

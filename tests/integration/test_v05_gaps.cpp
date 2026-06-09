@@ -208,7 +208,7 @@ TEST_F(ArcBenchmarkTest, UseBenchmarkTasks) {
     ArcEnvironment env(make_config());
     env.use_benchmark_tasks();
     EXPECT_TRUE(env.using_benchmark());
-    EXPECT_EQ(env.total_puzzles(), 10u);
+    EXPECT_EQ(env.total_puzzles(), 15u);
 }
 
 TEST_F(ArcBenchmarkTest, BenchmarkPuzzleHasTrainPairs) {

@@ -7,6 +7,8 @@
 #include "symbolic_descent/rule_library.hpp"
 #include "meta_evolution/evolutionary_selector.hpp"
 #include "meta_evolution/parameter_adapter.hpp"
+#include "meta_evolution/self_modifier.hpp"
+#include "symbolic_descent/dsl.hpp"
 #include "agent/goal_setter.hpp"
 #include "agent/planner.hpp"
 #include <vector>
@@ -24,6 +26,7 @@ public:
         symbolic_descent::SearchEngine::Config search_config;
         meta_evolution::EvolutionarySelector::Config evo_config;
         meta_evolution::ParameterAdapter::Config adapter_config;
+        meta_evolution::SelfModifier::Config self_mod_config;
         GoalSetter::Config goal_config;
         Planner::Config planner_config;
         Real novelty_threshold      = 0.3;
@@ -78,6 +81,8 @@ private:
     symbolic_descent::RuleLibrary rule_library_;
     meta_evolution::EvolutionarySelector evolution_;
     meta_evolution::ParameterAdapter adapter_;
+    meta_evolution::SelfModifier self_modifier_;
+    symbolic_descent::DSL dsl_;
     GoalSetter goal_setter_;
     Planner planner_;
     StructuredLogger logger_;
@@ -92,6 +97,8 @@ private:
     void try_evolve();
     void try_self_modify(Real novelty, Real comp_progress,
                           Real external_reward);
+    void try_strategy_evolution(Real novelty, Real comp_progress,
+                                Real external_reward);
     Action select_action_from_evolved(const State& state);
 };
 

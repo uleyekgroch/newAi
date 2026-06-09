@@ -30,6 +30,8 @@ public:
     void  update(const Observation& obs) override;
     void  record_action(const Action& action);
     void  set_learning_rate(Real lr) { config_.learning_rate = lr; }
+    [[nodiscard]] Real encoder_loss() const { return encoder_.total_reconstruction_loss(); }
+    [[nodiscard]] std::size_t encoder_learn_count() const { return encoder_.learn_count(); }
     Real  compression_progress() const override;
     [[nodiscard]] Real prediction_error_rate() const;
 
@@ -41,6 +43,8 @@ private:
 
     Real cumulative_error_     = 0.0;
     Real prev_avg_error_        = 0.0;
+    Real cumulative_log_loss_   = 0.0;  // log-likelihood based tracking
+    Real prev_avg_log_loss_     = 0.0;
     std::size_t update_count_   = 0;
     std::size_t prediction_count_ = 0;
 

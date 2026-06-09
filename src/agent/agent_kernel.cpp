@@ -1,6 +1,6 @@
 #include "agent/agent_kernel.hpp"
-#include "symbolic_descent/dsl.hpp"
 #include <sstream>
+#include <cmath>
 
 namespace uik::agent {
 
@@ -11,6 +11,7 @@ AgentKernel::AgentKernel(Config config)
     , rule_library_(100)
     , evolution_(config.evo_config)
     , adapter_(config.adapter_config)
+    , self_modifier_(config.self_mod_config)
     , goal_setter_(config.goal_config)
     , planner_(config.planner_config)
 {
@@ -68,14 +69,38 @@ Action AgentKernel::step(const Observation& obs, Real external_reward) {
     // 5. Compression progress
     Real comp_progress = world_model_.compression_progress();
 
-    // 6. Compute reward (use possibly-adapted curiosity weight)
+    // 6. Compute reward — use evolved RewardShaping program if available
     auto adapted = adapter_.current_params();
     Reward reward = goal_setter_.compute_reward(
         comp_progress, external_reward, novelty);
+
+    // Self-modification closed loop: apply evolved RewardShaping program
+    using SK = meta_evolution::SelfModifier::StrategyKind;
+    const auto& reward_prog = self_modifier_.current_strategy(SK::RewardShaping);
+    if (reward_prog && reward_prog->kind != OpKind::Identity) {
+        try {
+            // Pack reward components as a small tensor for the program
+            Tensor reward_input({4}, {comp_progress, external_reward, novelty, reward.intrinsic});
+            Tensor shaped = dsl_.execute(reward_prog, reward_input);
+            if (shaped.flat_size() >= 1) {
+                reward.intrinsic = shaped.at(0);
+            }
+        } catch (...) { /* keep original if program fails */ }
+    }
     total_reward_ += reward.total(adapted.curiosity_weight);
 
-    // 7. Set goal
+    // 7. Set goal — use evolved GoalFunction program if available
     State goal = goal_setter_.set_goal(state, comp_progress, external_reward);
+    const auto& goal_prog = self_modifier_.current_strategy(SK::GoalFunction);
+    if (goal_prog && goal_prog->kind != OpKind::Identity) {
+        try {
+            Tensor goal_input = goal.latent;
+            Tensor shaped_goal = dsl_.execute(goal_prog, goal_input);
+            if (shaped_goal.flat_size() == goal.latent.flat_size()) {
+                goal = State{shaped_goal};
+            }
+        } catch (...) { /* keep original */ }
+    }
 
     // 8. Plan
     auto plan = planner_.plan(state, goal, world_model_,
@@ -95,6 +120,7 @@ Action AgentKernel::step(const Observation& obs, Real external_reward) {
     if (config_.enable_self_modification &&
         step_count_ % config_.adapt_interval == 0) {
         try_self_modify(novelty, comp_progress, external_reward);
+        try_strategy_evolution(novelty, comp_progress, external_reward);
     }
 
     // 12. Select action
@@ -234,6 +260,41 @@ Action AgentKernel::select_action_from_evolved(const State& state) {
         }
     }
     return Action{best_action};
+}
+
+void AgentKernel::try_strategy_evolution(Real novelty, Real comp_progress,
+                                          Real external_reward) {
+    using SK = meta_evolution::SelfModifier::StrategyKind;
+
+    // Build evaluation context from recent observations
+    auto eval = [&](SK kind, const ProgramPtr& prog) -> Real {
+        if (!prog) return -1e6;
+        try {
+            if (kind == SK::RewardShaping) {
+                Tensor input({4}, {comp_progress, external_reward, novelty, 0.0});
+                Tensor out = dsl_.execute(prog, input);
+                // Good reward shaping: produces bounded, informative signal
+                Real val = out.flat_size() > 0 ? out.at(0) : 0.0;
+                return -std::abs(val) - static_cast<Real>(prog->description_length());
+            } else if (kind == SK::GoalFunction) {
+                if (current_state_.latent.empty()) return 0.0;
+                Tensor out = dsl_.execute(prog, current_state_.latent);
+                return -static_cast<Real>(prog->description_length());
+            } else {
+                return -static_cast<Real>(prog->description_length());
+            }
+        } catch (...) {
+            return -1e6;
+        }
+    };
+
+    auto improved = self_modifier_.evolve_all(eval);
+    if (improved > 0) {
+        logger_.info("strategy_evolved", {
+            {"improved", std::to_string(improved)},
+            {"total_mods", std::to_string(self_modifier_.modification_count())}
+        });
+    }
 }
 
 } // namespace uik::agent

@@ -91,3 +91,4 @@ add_uik_test(test_extended_dsl       tests/symbolic_descent/test_extended_dsl.cp
 add_uik_test(test_guided_search      tests/symbolic_descent/test_guided_search.cpp)
 add_uik_test(test_v04_integration    tests/integration/test_v04_integration.cpp)
 add_uik_test(test_v05_gaps           tests/integration/test_v05_gaps.cpp)
+add_uik_test(test_v06_deep_fixes     tests/integration/test_v06_deep_fixes.cpp)

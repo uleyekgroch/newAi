@@ -18,6 +18,10 @@ public:
         Real lambda                   = 1.0;
         int max_depth                 = 4;
         unsigned seed                 = 42;
+        // Beam search parameters
+        std::size_t beam_width        = 8;
+        std::size_t beam_expansions   = 5;   // expansions per beam candidate
+        bool use_beam_search          = true;
     };
 
     SearchEngine();
@@ -46,6 +50,13 @@ private:
     void evolve_generation(std::vector<Candidate>& population,
                             const Dataset& data);
     void sort_by_score(std::vector<Candidate>& population);
+
+    // Beam search: expand best candidates with type-directed operators
+    std::optional<ProgramPtr> beam_search(const Dataset& data,
+                                           std::size_t max_iterations);
+    // Type-directed synthesis: generate candidates matching output structure
+    std::vector<ProgramPtr> type_directed_expand(const ProgramPtr& base,
+                                                  const Dataset& data);
 };
 
 } // namespace uik::symbolic_descent

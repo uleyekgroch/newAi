@@ -296,6 +296,12 @@ void ArcEnvironment::generate_benchmark_puzzles() {
     puzzles_.push_back(generate_symmetry_puzzle());
     puzzles_.push_back(generate_count_and_fill_puzzle());
     puzzles_.push_back(generate_gravity_puzzle());
+    // Add new ARC-AGI benchmark patterns
+    puzzles_.push_back(generate_crop_nonzero_puzzle());
+    puzzles_.push_back(generate_upscale_puzzle());
+    puzzles_.push_back(generate_denoise_puzzle());
+    puzzles_.push_back(generate_flood_fill_puzzle());
+    puzzles_.push_back(generate_diagonal_puzzle());
     // Add standard transforms as well
     puzzles_.push_back(generate_rotation_puzzle());
     puzzles_.push_back(generate_flip_puzzle());
@@ -462,6 +468,193 @@ ArcEnvironment::Puzzle ArcEnvironment::generate_gravity_puzzle() {
     }
     p.test_input = random_grid();
     p.test_output = apply_gravity(p.test_input);
+    return p;
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_crop_nonzero_puzzle() {
+    // Rule: find bounding box of non-zero cells, output is the cropped region
+    // (padded to grid size with zeros)
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+
+    auto make_sparse_grid = [&]() {
+        std::vector<Real> data(rows * cols, 0.0);
+        std::uniform_int_distribution<int> color(1, std::max(2, config_.num_colors - 1));
+        std::uniform_int_distribution<Dim> rpos(1, rows - 2);
+        std::uniform_int_distribution<Dim> cpos(1, cols - 2);
+        // Place a small shape (2x2 block)
+        Dim r0 = rpos(rng_);
+        Dim c0 = cpos(rng_);
+        int c = color(rng_);
+        for (Dim dr = 0; dr < 2 && r0+dr < rows; ++dr)
+            for (Dim dc = 0; dc < 2 && c0+dc < cols; ++dc)
+                data[(r0+dr)*cols + (c0+dc)] = static_cast<Real>(c);
+        return Tensor({rows * cols}, std::move(data));
+    };
+
+    auto apply_crop = [&](const Tensor& grid) {
+        // Find bounding box then write cropped content to top-left
+        Dim min_r = rows, max_r = 0, min_c = cols, max_c = 0;
+        for (Dim r = 0; r < rows; ++r) {
+            for (Dim cc = 0; cc < cols; ++cc) {
+                if (static_cast<int>(grid.at(r*cols+cc)) != 0) {
+                    min_r = std::min(min_r, r);
+                    max_r = std::max(max_r, r);
+                    min_c = std::min(min_c, cc);
+                    max_c = std::max(max_c, cc);
+                }
+            }
+        }
+        std::vector<Real> result(rows*cols, 0.0);
+        if (min_r <= max_r && min_c <= max_c) {
+            for (Dim r = min_r; r <= max_r; ++r)
+                for (Dim cc = min_c; cc <= max_c; ++cc)
+                    result[(r-min_r)*cols + (cc-min_c)] = grid.at(r*cols+cc);
+        }
+        return Tensor({rows*cols}, std::move(result));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        Tensor input = make_sparse_grid();
+        p.train_pairs.emplace_back(input, apply_crop(input));
+    }
+    p.test_input = make_sparse_grid();
+    p.test_output = apply_crop(p.test_input);
+    return p;
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_upscale_puzzle() {
+    // Rule: 2x upscale — each cell becomes a 2x2 block
+    // Since grid stays same size, we effectively show top-left quarter input
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+
+    auto apply_upscale = [&](const Tensor& grid) {
+        std::vector<Real> result(rows*cols, 0.0);
+        Dim half_r = rows / 2;
+        Dim half_c = cols / 2;
+        for (Dim r = 0; r < half_r; ++r) {
+            for (Dim c = 0; c < half_c; ++c) {
+                Real val = grid.at(r*cols + c);
+                result[(2*r)*cols + 2*c] = val;
+                if (2*c+1 < cols) result[(2*r)*cols + 2*c+1] = val;
+                if (2*r+1 < rows) result[(2*r+1)*cols + 2*c] = val;
+                if (2*r+1 < rows && 2*c+1 < cols) result[(2*r+1)*cols + 2*c+1] = val;
+            }
+        }
+        return Tensor({rows*cols}, std::move(result));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        Tensor input = random_grid();
+        p.train_pairs.emplace_back(input, apply_upscale(input));
+    }
+    p.test_input = random_grid();
+    p.test_output = apply_upscale(p.test_input);
+    return p;
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_denoise_puzzle() {
+    // Rule: remove isolated cells (cells with no same-color neighbors)
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+
+    auto apply_denoise = [&](const Tensor& grid) {
+        std::vector<Real> result(rows*cols, 0.0);
+        for (Dim r = 0; r < rows; ++r) {
+            for (Dim c = 0; c < cols; ++c) {
+                Real val = grid.at(r*cols+c);
+                if (static_cast<int>(val) == 0) continue;
+                // Check 4-neighbors for same color
+                bool has_neighbor = false;
+                if (r > 0 && static_cast<int>(grid.at((r-1)*cols+c)) == static_cast<int>(val)) has_neighbor = true;
+                if (r+1 < rows && static_cast<int>(grid.at((r+1)*cols+c)) == static_cast<int>(val)) has_neighbor = true;
+                if (c > 0 && static_cast<int>(grid.at(r*cols+c-1)) == static_cast<int>(val)) has_neighbor = true;
+                if (c+1 < cols && static_cast<int>(grid.at(r*cols+c+1)) == static_cast<int>(val)) has_neighbor = true;
+                if (has_neighbor) result[r*cols+c] = val;
+            }
+        }
+        return Tensor({rows*cols}, std::move(result));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        Tensor input = random_grid();
+        p.train_pairs.emplace_back(input, apply_denoise(input));
+    }
+    p.test_input = random_grid();
+    p.test_output = apply_denoise(p.test_input);
+    return p;
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_flood_fill_puzzle() {
+    // Rule: flood fill from top-left corner with a specific color
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+    std::uniform_int_distribution<int> color(1, std::max(2, config_.num_colors - 1));
+    int fill_color = color(rng_);
+
+    auto apply_flood = [&](const Tensor& grid) {
+        std::vector<Real> result(rows*cols);
+        for (Dim i = 0; i < rows*cols; ++i) result[i] = grid.at(i);
+        // BFS from (0,0)
+        int start_val = static_cast<int>(grid.at(0));
+        if (start_val == fill_color) {
+            return Tensor({rows*cols}, std::move(result));
+        }
+        std::vector<std::pair<Dim,Dim>> stack;
+        stack.push_back({0, 0});
+        std::vector<bool> visited(rows*cols, false);
+        while (!stack.empty()) {
+            auto [r, c] = stack.back();
+            stack.pop_back();
+            if (r >= rows || c >= cols) continue;
+            Dim idx = r*cols+c;
+            if (visited[idx]) continue;
+            if (static_cast<int>(result[idx]) != start_val) continue;
+            visited[idx] = true;
+            result[idx] = static_cast<Real>(fill_color);
+            if (r > 0) stack.push_back({r-1, c});
+            if (r+1 < rows) stack.push_back({r+1, c});
+            if (c > 0) stack.push_back({r, c-1});
+            if (c+1 < cols) stack.push_back({r, c+1});
+        }
+        return Tensor({rows*cols}, std::move(result));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        Tensor input = random_grid();
+        p.train_pairs.emplace_back(input, apply_flood(input));
+    }
+    p.test_input = random_grid();
+    p.test_output = apply_flood(p.test_input);
+    return p;
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_diagonal_puzzle() {
+    // Rule: extract the main diagonal and fill the rest with 0
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+
+    auto apply_diagonal = [&](const Tensor& grid) {
+        std::vector<Real> result(rows*cols, 0.0);
+        Dim diag_len = std::min(rows, cols);
+        for (Dim i = 0; i < diag_len; ++i) {
+            result[i*cols + i] = grid.at(i*cols + i);
+        }
+        return Tensor({rows*cols}, std::move(result));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        Tensor input = random_grid();
+        p.train_pairs.emplace_back(input, apply_diagonal(input));
+    }
+    p.test_input = random_grid();
+    p.test_output = apply_diagonal(p.test_input);
     return p;
 }
 
