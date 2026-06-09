@@ -43,6 +43,8 @@ add_library(uik_core
     src/agent/arc_env.cpp
     src/agent/physics_env.cpp
     src/agent/curriculum.cpp
+    src/agent/arc_loader.cpp
+    src/agent/arc_benchmark.cpp
 )
 target_include_directories(uik_core PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
@@ -92,3 +94,10 @@ add_uik_test(test_guided_search      tests/symbolic_descent/test_guided_search.c
 add_uik_test(test_v04_integration    tests/integration/test_v04_integration.cpp)
 add_uik_test(test_v05_gaps           tests/integration/test_v05_gaps.cpp)
 add_uik_test(test_v06_deep_fixes     tests/integration/test_v06_deep_fixes.cpp)
+
+# ARC benchmark test (needs data path)
+add_executable(test_arc_benchmark tests/integration/test_arc_benchmark.cpp)
+target_link_libraries(test_arc_benchmark PRIVATE uik_core GTest::gtest_main)
+target_compile_options(test_arc_benchmark PRIVATE -Wno-restrict)
+target_compile_definitions(test_arc_benchmark PRIVATE ARC_DATA_DIR="${CMAKE_SOURCE_DIR}/data")
+gtest_discover_tests(test_arc_benchmark)
