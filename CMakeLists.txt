@@ -12,6 +12,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
+# GCC 12 emits a spurious -Warray-bounds false positive in Release builds
+# when inlining std::vector copy through Tensor. Suppress it globally.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "13")
+    add_compile_options(-Wno-array-bounds)
+endif()
+
 # ── Library: core kernel ──
 add_library(uik_core
     src/world_model/latent_state.cpp
