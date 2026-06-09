@@ -56,6 +56,12 @@ public:
     // Total episodes completed across all stages
     [[nodiscard]] std::size_t total_episodes() const { return total_episodes_; }
 
+    // Open-ended environment generation: procedurally generate new stages
+    // beyond the fixed curriculum
+    bool open_ended() const { return open_ended_; }
+    void enable_open_ended() { open_ended_ = true; }
+    std::size_t generated_stages() const { return generated_count_; }
+
 private:
     Config config_;
     std::vector<std::unique_ptr<IEnvironment>> envs_;
@@ -66,6 +72,10 @@ private:
     std::size_t total_episodes_ = 0;
 
     void build_environments();
+    void generate_next_stage();  // procedurally generate a new harder stage
+    bool open_ended_ = false;
+    std::size_t generated_count_ = 0;
+    std::mt19937 rng_;
 };
 
 } // namespace uik::agent

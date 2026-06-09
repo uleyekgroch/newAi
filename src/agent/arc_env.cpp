@@ -283,4 +283,186 @@ Real ArcEnvironment::compute_similarity(const Tensor& a, const Tensor& b) const 
     return static_cast<Real>(matches) / static_cast<Real>(a.flat_size());
 }
 
+void ArcEnvironment::use_benchmark_tasks() {
+    use_benchmark_ = true;
+    generate_benchmark_puzzles();
+}
+
+void ArcEnvironment::generate_benchmark_puzzles() {
+    puzzles_.clear();
+    // 10 benchmark puzzles covering real ARC-AGI task patterns
+    puzzles_.push_back(generate_pattern_completion_puzzle());
+    puzzles_.push_back(generate_border_fill_puzzle());
+    puzzles_.push_back(generate_symmetry_puzzle());
+    puzzles_.push_back(generate_count_and_fill_puzzle());
+    puzzles_.push_back(generate_gravity_puzzle());
+    // Add standard transforms as well
+    puzzles_.push_back(generate_rotation_puzzle());
+    puzzles_.push_back(generate_flip_puzzle());
+    puzzles_.push_back(generate_color_map_puzzle());
+    puzzles_.push_back(generate_fill_puzzle());
+    puzzles_.push_back(generate_translate_puzzle());
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_pattern_completion_puzzle() {
+    // Pattern: repeat a row pattern to fill the grid
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+    std::uniform_int_distribution<int> color(1, std::max(2, config_.num_colors - 1));
+
+    // Create a repeating pattern (e.g., [1, 2, 1, 2, ...])
+    std::vector<int> pattern(cols);
+    for (Dim c = 0; c < cols; ++c) pattern[c] = color(rng_);
+
+    auto make_input = [&]() {
+        std::vector<Real> data(rows * cols, 0.0);
+        // Fill first row with pattern, rest is 0
+        for (Dim c = 0; c < cols; ++c) {
+            data[c] = static_cast<Real>(pattern[c]);
+        }
+        return Tensor({rows * cols}, std::move(data));
+    };
+    auto make_output = [&]() {
+        std::vector<Real> data(rows * cols, 0.0);
+        // Fill ALL rows with pattern
+        for (Dim r = 0; r < rows; ++r) {
+            for (Dim c = 0; c < cols; ++c) {
+                data[r * cols + c] = static_cast<Real>(pattern[c]);
+            }
+        }
+        return Tensor({rows * cols}, std::move(data));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        // Regenerate pattern for each pair
+        for (Dim c = 0; c < cols; ++c) pattern[c] = color(rng_);
+        p.train_pairs.emplace_back(make_input(), make_output());
+    }
+    for (Dim c = 0; c < cols; ++c) pattern[c] = color(rng_);
+    p.test_input = make_input();
+    p.test_output = make_output();
+    return p;
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_border_fill_puzzle() {
+    // Rule: fill the border cells with a specific color, keep interior
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+    std::uniform_int_distribution<int> color(1, std::max(2, config_.num_colors - 1));
+    int border_color = color(rng_);
+
+    auto apply_border = [&](const Tensor& grid) {
+        std::vector<Real> result(rows * cols);
+        for (Dim i = 0; i < rows * cols; ++i) result[i] = grid.at(i);
+        for (Dim r = 0; r < rows; ++r) {
+            for (Dim c = 0; c < cols; ++c) {
+                if (r == 0 || r == rows - 1 || c == 0 || c == cols - 1) {
+                    result[r * cols + c] = static_cast<Real>(border_color);
+                }
+            }
+        }
+        return Tensor({rows * cols}, std::move(result));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        Tensor input = random_grid();
+        p.train_pairs.emplace_back(input, apply_border(input));
+    }
+    p.test_input = random_grid();
+    p.test_output = apply_border(p.test_input);
+    return p;
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_symmetry_puzzle() {
+    // Rule: mirror the left half to the right half (horizontal symmetry)
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+
+    auto apply_symmetry = [&](const Tensor& grid) {
+        std::vector<Real> result(rows * cols);
+        for (Dim i = 0; i < rows * cols; ++i) result[i] = grid.at(i);
+        for (Dim r = 0; r < rows; ++r) {
+            for (Dim c = cols / 2; c < cols; ++c) {
+                Dim mirror_c = cols - 1 - c;
+                result[r * cols + c] = result[r * cols + mirror_c];
+            }
+        }
+        return Tensor({rows * cols}, std::move(result));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        Tensor input = random_grid();
+        p.train_pairs.emplace_back(input, apply_symmetry(input));
+    }
+    p.test_input = random_grid();
+    p.test_output = apply_symmetry(p.test_input);
+    return p;
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_count_and_fill_puzzle() {
+    // Rule: count cells of a specific color, fill output row 0 with that count
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+    std::uniform_int_distribution<int> color(1, std::max(2, config_.num_colors - 1));
+    int target_color = color(rng_);
+
+    auto apply_count_fill = [&](const Tensor& grid) {
+        int count = 0;
+        for (Dim i = 0; i < grid.flat_size(); ++i) {
+            if (static_cast<int>(grid.at(i)) == target_color) ++count;
+        }
+        std::vector<Real> result(rows * cols, 0.0);
+        // Fill first min(count, cols) cells of row 0
+        for (int c = 0; c < std::min(count, static_cast<int>(cols)); ++c) {
+            result[static_cast<Dim>(c)] = static_cast<Real>(target_color);
+        }
+        return Tensor({rows * cols}, std::move(result));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        Tensor input = random_grid();
+        p.train_pairs.emplace_back(input, apply_count_fill(input));
+    }
+    p.test_input = random_grid();
+    p.test_output = apply_count_fill(p.test_input);
+    return p;
+}
+
+ArcEnvironment::Puzzle ArcEnvironment::generate_gravity_puzzle() {
+    // Rule: non-zero cells "fall" to the bottom of each column
+    Dim rows = config_.grid_rows;
+    Dim cols = config_.grid_cols;
+
+    auto apply_gravity = [&](const Tensor& grid) {
+        std::vector<Real> result(rows * cols, 0.0);
+        for (Dim c = 0; c < cols; ++c) {
+            // Collect non-zero values in this column
+            std::vector<Real> non_zero;
+            for (Dim r = 0; r < rows; ++r) {
+                Real val = grid.at(r * cols + c);
+                if (static_cast<int>(val) != 0) non_zero.push_back(val);
+            }
+            // Place at bottom
+            Dim dest = rows - non_zero.size();
+            for (std::size_t i = 0; i < non_zero.size(); ++i) {
+                result[(dest + i) * cols + c] = non_zero[i];
+            }
+        }
+        return Tensor({rows * cols}, std::move(result));
+    };
+
+    Puzzle p;
+    for (int i = 0; i < 3; ++i) {
+        Tensor input = random_grid();
+        p.train_pairs.emplace_back(input, apply_gravity(input));
+    }
+    p.test_input = random_grid();
+    p.test_output = apply_gravity(p.test_input);
+    return p;
+}
+
 } // namespace uik::agent

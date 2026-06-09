@@ -43,6 +43,12 @@ public:
     // Simplification: try to reduce program without changing behavior
     [[nodiscard]] ProgramPtr simplify(const ProgramPtr& program);
 
+    // Template-guided edit: learn patterns from successful programs
+    // and apply them as targeted mutations (non-LLM alternative to LLM_guided_edit)
+    void add_template(const ProgramPtr& successful_program);
+    [[nodiscard]] ProgramPtr template_guided_edit(const ProgramPtr& program);
+    [[nodiscard]] std::size_t template_count() const { return templates_.size(); }
+
 private:
     int max_depth_;
     int color_range_;
@@ -59,6 +65,18 @@ private:
 
     // Helper: count structure similarity
     static Real structural_similarity(const ProgramPtr& a, const ProgramPtr& b);
+
+    // Template library: patterns extracted from successful programs
+    struct Template {
+        ProgramPtr pattern;    // subtree pattern
+        Real fitness;          // fitness of source program
+    };
+    std::vector<Template> templates_;
+    static constexpr std::size_t MAX_TEMPLATES = 50;
+
+    // Extract useful subtrees from a program
+    void extract_subtrees(const ProgramPtr& prog, std::vector<ProgramPtr>& out,
+                          int depth = 0);
 };
 
 } // namespace uik::symbolic_descent

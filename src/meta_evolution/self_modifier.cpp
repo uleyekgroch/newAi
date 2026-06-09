@@ -13,10 +13,8 @@ SelfModifier::SelfModifier(Config config)
     , space_(3, 10, 5, config.seed)
     , rng_(config.seed)
 {
-    // Initialize default strategies
-    for (auto kind : {StrategyKind::FitnessWeighting,
-                      StrategyKind::NeighborhoodBias,
-                      StrategyKind::ExplorationPolicy}) {
+    // Initialize default strategies for all kinds
+    for (auto kind : all_kinds()) {
         strategies_.push_back({kind, identity(), 0.0});
     }
 }
@@ -99,6 +97,31 @@ void SelfModifier::ensure_strategy_exists(StrategyKind kind) {
         if (s.kind == kind) return;
     }
     strategies_.push_back({kind, identity(), 0.0});
+}
+
+std::vector<SelfModifier::StrategyKind> SelfModifier::all_kinds() {
+    return {
+        StrategyKind::FitnessWeighting,
+        StrategyKind::NeighborhoodBias,
+        StrategyKind::ExplorationPolicy,
+        StrategyKind::GoalFunction,
+        StrategyKind::RewardShaping,
+        StrategyKind::MutationStrategy,
+        StrategyKind::SimplificationRule,
+    };
+}
+
+std::size_t SelfModifier::evolve_all(
+    std::function<Real(StrategyKind, const ProgramPtr&)> eval_fn)
+{
+    std::size_t improved = 0;
+    for (auto kind : all_kinds()) {
+        auto wrapper = [&](const ProgramPtr& p) { return eval_fn(kind, p); };
+        if (try_modify(kind, wrapper)) {
+            ++improved;
+        }
+    }
+    return improved;
 }
 
 } // namespace uik::meta_evolution

@@ -62,6 +62,22 @@ private:
     Tensor apply_translate(const Tensor& grid, int dx, int dy);
     Tensor flatten_puzzle_obs() const;
     Real compute_similarity(const Tensor& a, const Tensor& b) const;
+
+    // Built-in ARC-AGI benchmark tasks (real patterns from the public dataset)
+    void generate_benchmark_puzzles();
+    Puzzle generate_pattern_completion_puzzle();   // complete a repeating pattern
+    Puzzle generate_border_fill_puzzle();           // fill border with specific color
+    Puzzle generate_symmetry_puzzle();              // mirror to make symmetric
+    Puzzle generate_count_and_fill_puzzle();        // count objects → fill output
+    Puzzle generate_gravity_puzzle();               // objects fall down
+
+public:
+    // Use built-in ARC-AGI benchmark tasks instead of random ones
+    void use_benchmark_tasks();
+    [[nodiscard]] bool using_benchmark() const { return use_benchmark_; }
+
+private:
+    bool use_benchmark_ = false;
 };
 
 } // namespace uik::agent

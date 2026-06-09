@@ -8,7 +8,7 @@ CurriculumManager::CurriculumManager()
 {}
 
 CurriculumManager::CurriculumManager(Config config)
-    : config_(config)
+    : config_(config), rng_(config.seed)
 {
     if (config_.stages.empty()) {
         // Default curriculum: GridWorld → ARC → Physics
@@ -37,7 +37,13 @@ bool CurriculumManager::report_episode(Real total_reward, std::size_t /*steps*/)
     ++total_episodes_;
     stage_rewards_.push_back(total_reward);
 
-    if (current_stage_ >= stages_.size()) return false;
+    if (current_stage_ >= stages_.size()) {
+        // Open-ended: generate new stage when curriculum is exhausted
+        if (open_ended_) {
+            generate_next_stage();
+        }
+        return false;
+    }
     const auto& stage = stages_[current_stage_];
 
     if (stage_episodes_ >= stage.min_episodes) {
@@ -46,6 +52,10 @@ bool CurriculumManager::report_episode(Real total_reward, std::size_t /*steps*/)
             ++current_stage_;
             stage_rewards_.clear();
             stage_episodes_ = 0;
+            // If we passed the last fixed stage and open_ended, generate more
+            if (current_stage_ >= stages_.size() && open_ended_) {
+                generate_next_stage();
+            }
             return true;
         }
     }
@@ -104,6 +114,63 @@ void CurriculumManager::build_environments() {
             envs_.push_back(std::make_unique<GridWorld>(gc));
         }
     }
+}
+
+void CurriculumManager::generate_next_stage() {
+    ++generated_count_;
+    // Procedurally increase difficulty parameters
+    std::uniform_int_distribution<int> env_type(0, 2);  // grid / arc / physics
+    int type = env_type(rng_);
+
+    // Scale difficulty with generation count
+    std::size_t difficulty = generated_count_;
+    int grid_size = static_cast<int>(std::min(Dim{3} + difficulty, Dim{30}));
+    int num_colors = static_cast<int>(std::min(Dim{5} + difficulty, Dim{30}));
+    std::size_t max_steps = 100 + difficulty * 50;
+    Real pass_threshold = std::min(0.3 + 0.05 * static_cast<Real>(difficulty), 0.9);
+
+    std::string stage_name = "gen_" + std::to_string(generated_count_);
+
+    switch (type) {
+        case 0: {
+            stage_name += "_grid_" + std::to_string(grid_size);
+            GridWorld::Config gc;
+            gc.rows = static_cast<Dim>(grid_size);
+            gc.cols = static_cast<Dim>(grid_size);
+            gc.num_colors = num_colors;
+            gc.max_steps = max_steps;
+            gc.seed = config_.seed + static_cast<unsigned>(generated_count_);
+            envs_.push_back(std::make_unique<GridWorld>(gc));
+            break;
+        }
+        case 1: {
+            stage_name += "_arc_" + std::to_string(grid_size);
+            ArcEnvironment::Config ac;
+            ac.grid_rows = static_cast<Dim>(grid_size);
+            ac.grid_cols = static_cast<Dim>(grid_size);
+            ac.num_colors = num_colors;
+            ac.puzzles_per_episode = std::min(difficulty + 3, std::size_t{20});
+            ac.seed = config_.seed + static_cast<unsigned>(generated_count_);
+            auto env = std::make_unique<ArcEnvironment>(ac);
+            // Use benchmark tasks for generated ARC stages
+            env->use_benchmark_tasks();
+            envs_.push_back(std::move(env));
+            break;
+        }
+        default: {
+            stage_name += "_physics_" + std::to_string(difficulty);
+            PhysicsEnvironment::Config pc;
+            pc.max_objects = static_cast<int>(std::min(difficulty + 2, std::size_t{20}));
+            pc.gravity = -0.1 * static_cast<Real>(difficulty);
+            pc.max_steps = max_steps;
+            pc.seed = config_.seed + static_cast<unsigned>(generated_count_);
+            envs_.push_back(std::make_unique<PhysicsEnvironment>(pc));
+            break;
+        }
+    }
+
+    stages_.push_back({stage_name, max_steps, pass_threshold,
+                       std::max(std::size_t{3}, difficulty)});
 }
 
 } // namespace uik::agent

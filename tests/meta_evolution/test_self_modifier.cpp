@@ -12,7 +12,7 @@ protected:
 TEST_F(SelfModifierTest, InitializesWithDefaultStrategies) {
     EXPECT_EQ(modifier_.modification_count(), 0u);
     auto strategies = modifier_.strategies();
-    EXPECT_EQ(strategies.size(), 3u);
+    EXPECT_EQ(strategies.size(), 7u);
 }
 
 TEST_F(SelfModifierTest, CurrentStrategyReturnsProgram) {

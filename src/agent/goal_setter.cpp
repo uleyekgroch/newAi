@@ -11,15 +11,16 @@ State GoalSetter::set_goal(const State& current,
                             Real compression_progress,
                             Real external_reward) {
     // Goal = current state biased toward direction of maximum expected reward.
-    // The goal is a latent state that the planner will try to reach.
-    // In absence of a learned goal generator, we perturb the current state
-    // in the direction that maximizes combined intrinsic + external reward.
+    // Apply time discount: recent rewards matter more
+    Real discount = 1.0;
+    if (!step_rewards_.empty()) {
+        // Decay influence of old rewards
+        discount = std::pow(config_.gamma, static_cast<Real>(step_rewards_.size()));
+    }
     Real total_drive = external_reward +
                         config_.curiosity_weight * compression_progress;
-    Real scale = std::tanh(total_drive) * config_.exploration_bonus;
+    Real scale = std::tanh(total_drive * discount) * config_.exploration_bonus;
 
-    // Perturb latent state: goal = current + scale * direction
-    // Direction: uniform perturbation toward "more interesting" states
     std::vector<Real> goal_latent(current.latent.flat_size());
     for (Dim i = 0; i < current.latent.flat_size(); ++i) {
         goal_latent[i] = current.latent.at(i) + scale;
@@ -35,6 +36,25 @@ Reward GoalSetter::compute_reward(Real compression_progress,
         intrinsic += config_.exploration_bonus;
     }
     return Reward{external_reward, intrinsic};
+}
+
+Real GoalSetter::discounted_return() const {
+    // J = Σ γ^(τ-t0) * R(τ)
+    Real total = 0.0;
+    Real gamma_power = 1.0;
+    for (const auto& r : step_rewards_) {
+        total += gamma_power * r;
+        gamma_power *= config_.gamma;
+    }
+    return total;
+}
+
+void GoalSetter::record_step_reward(Real reward) {
+    step_rewards_.push_back(reward);
+}
+
+void GoalSetter::reset_episode() {
+    step_rewards_.clear();
 }
 
 } // namespace uik::agent

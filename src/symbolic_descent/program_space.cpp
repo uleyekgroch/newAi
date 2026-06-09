@@ -359,4 +359,95 @@ Real ProgramSpace::structural_similarity(const ProgramPtr& a, const ProgramPtr& 
     return (score + child_score) / (1.0 + static_cast<Real>(max_children));
 }
 
+// ── Template-guided edit ──
+
+void ProgramSpace::extract_subtrees(const ProgramPtr& prog,
+                                     std::vector<ProgramPtr>& out, int depth) {
+    if (!prog || depth > 3) return;
+    if (prog->kind != OpKind::Identity) {
+        out.push_back(prog);
+    }
+    for (const auto& child : prog->children) {
+        extract_subtrees(child, out, depth + 1);
+    }
+}
+
+void ProgramSpace::add_template(const ProgramPtr& successful_program) {
+    if (!successful_program) return;
+
+    std::vector<ProgramPtr> subtrees;
+    extract_subtrees(successful_program, subtrees);
+
+    for (const auto& sub : subtrees) {
+        if (templates_.size() >= MAX_TEMPLATES) {
+            // Replace lowest-fitness template
+            auto worst = std::min_element(templates_.begin(), templates_.end(),
+                [](const Template& a, const Template& b) { return a.fitness < b.fitness; });
+            if (worst != templates_.end()) {
+                worst->pattern = std::make_shared<ProgramNode>(*sub);
+                worst->fitness = static_cast<Real>(sub->description_length());
+            }
+        } else {
+            templates_.push_back({
+                std::make_shared<ProgramNode>(*sub),
+                static_cast<Real>(sub->description_length())
+            });
+        }
+    }
+}
+
+ProgramPtr ProgramSpace::template_guided_edit(const ProgramPtr& program) {
+    if (!program) return random_program();
+    if (templates_.empty()) return type_aware_mutate(program);
+
+    // Select a template weighted by fitness
+    std::vector<Real> weights(templates_.size());
+    Real max_f = 0.0;
+    for (const auto& t : templates_) max_f = std::max(max_f, t.fitness);
+    for (std::size_t i = 0; i < templates_.size(); ++i) {
+        weights[i] = std::max(0.1, templates_[i].fitness - max_f + 10.0);
+    }
+    Real total = std::accumulate(weights.begin(), weights.end(), 0.0);
+    std::uniform_real_distribution<Real> dist(0.0, total);
+    Real r = dist(rng_);
+    Real cum = 0.0;
+    std::size_t chosen = 0;
+    for (std::size_t i = 0; i < weights.size(); ++i) {
+        cum += weights[i];
+        if (r <= cum) { chosen = i; break; }
+    }
+
+    auto& templ = templates_[chosen].pattern;
+
+    // Strategy: graft the template subtree into the program
+    auto result = std::make_shared<ProgramNode>(*program);
+    if (!result->children.empty()) {
+        // Replace a random child with a composition of child + template
+        std::uniform_int_distribution<std::size_t> idx(0, result->children.size() - 1);
+        auto target = idx(rng_);
+        std::uniform_int_distribution<int> strategy(0, 2);
+        switch (strategy(rng_)) {
+            case 0:
+                // Replace child with template
+                result->children[target] = std::make_shared<ProgramNode>(*templ);
+                break;
+            case 1:
+                // Compose child with template
+                result->children[target] = compose(result->children[target],
+                                                    std::make_shared<ProgramNode>(*templ));
+                break;
+            default:
+                // Analogy: match template's op kind to child
+                result->children[target]->kind = templ->kind;
+                result->children[target]->param1 = templ->param1;
+                result->children[target]->param2 = templ->param2;
+                break;
+        }
+    } else {
+        // Leaf: compose with template
+        return compose(result, std::make_shared<ProgramNode>(*templ));
+    }
+    return result;
+}
+
 } // namespace uik::symbolic_descent

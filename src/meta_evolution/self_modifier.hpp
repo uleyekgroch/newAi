@@ -28,6 +28,11 @@ public:
         FitnessWeighting,
         NeighborhoodBias,
         ExplorationPolicy,
+        // Enhanced self-referential: modify more kernel aspects
+        GoalFunction,         // how goals are selected
+        RewardShaping,        // intrinsic reward weighting
+        MutationStrategy,     // which mutation operators to prefer
+        SimplificationRule,   // program simplification heuristics
     };
 
     struct Strategy {
@@ -60,6 +65,13 @@ public:
 
     // Get the archive of all tried strategies
     [[nodiscard]] const Archive& strategy_archive() const { return archive_; }
+
+    // Batch modification: try to improve all strategies in one round
+    // Returns number of strategies improved
+    std::size_t evolve_all(std::function<Real(StrategyKind, const ProgramPtr&)> eval_fn);
+
+    // Get all strategy kinds
+    static std::vector<StrategyKind> all_kinds();
 
 private:
     Config config_;
