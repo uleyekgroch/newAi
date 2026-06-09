@@ -101,6 +101,15 @@ tests/
 - [x] Add .gitignore
 - [x] Update PR
 
+### Phase 8: v0.3 Self-Modification & Observability
+- [x] Program serialization: serialize/deserialize ProgramNode to/from S-expressions — 8 tests
+- [x] ParameterAdapter (self-modification): adapts learning rate, exploration, curiosity via performance trends — 7 tests
+- [x] StructuredLogger: machine-readable key=value log output with configurable level/sink — 7 tests
+- [x] Wire ParameterAdapter into AgentKernel (adapt_interval, enable_self_modification flag)
+- [x] Wire StructuredLogger into AgentKernel (kernel_init, run_start, run_end, rule_induced, self_modify)
+- [x] Integration tests: end-to-end GridWorld + self-modification + serialization — 6 tests
+- [x] 116 tests total, all passing
+
 ## Design Decisions
 
 1. **C++20 features**: concepts, ranges, std::variant, constexpr, structured bindings, modules (if supported)
@@ -109,3 +118,5 @@ tests/
 4. **Dependency injection**: all domains depend on interfaces, not concretions (DIP)
 5. **GoogleTest**: TDD with test-first for all domain logic
 6. **Closed-loop architecture**: SymbolicDescent induces rules → seeds MetaEvolution → evolved programs feed back into RuleLibrary → Agent uses rules for fallback decisions
+7. **Self-modification**: ParameterAdapter uses linear regression on reward/compression/novelty trends to adjust kernel hyperparameters online (Darwin Gödel Machine principle)
+8. **S-expression serialization**: Programs serialize as `(OpName p1 p2 child...)` for persistence and transfer

@@ -26,6 +26,7 @@ add_library(uik_core
     src/meta_evolution/archive.cpp
     src/meta_evolution/mutator.cpp
     src/meta_evolution/evolutionary_selector.cpp
+    src/meta_evolution/parameter_adapter.cpp
     src/agent/goal_setter.cpp
     src/agent/planner.cpp
     src/agent/agent_kernel.cpp
@@ -58,9 +59,13 @@ function(add_uik_test TEST_NAME TEST_SRC)
     gtest_discover_tests(${TEST_NAME})
 endfunction()
 
-add_uik_test(test_world_model    tests/world_model/test_world_model.cpp)
-add_uik_test(test_symbolic        tests/symbolic_descent/test_symbolic_descent.cpp)
-add_uik_test(test_rule_library    tests/symbolic_descent/test_rule_library.cpp)
-add_uik_test(test_meta_evolution  tests/meta_evolution/test_meta_evolution.cpp)
-add_uik_test(test_agent           tests/agent/test_agent.cpp)
-add_uik_test(test_grid_world      tests/agent/test_grid_world.cpp)
+add_uik_test(test_world_model      tests/world_model/test_world_model.cpp)
+add_uik_test(test_symbolic          tests/symbolic_descent/test_symbolic_descent.cpp)
+add_uik_test(test_rule_library      tests/symbolic_descent/test_rule_library.cpp)
+add_uik_test(test_meta_evolution    tests/meta_evolution/test_meta_evolution.cpp)
+add_uik_test(test_param_adapter     tests/meta_evolution/test_parameter_adapter.cpp)
+add_uik_test(test_agent             tests/agent/test_agent.cpp)
+add_uik_test(test_grid_world        tests/agent/test_grid_world.cpp)
+add_uik_test(test_serialization     tests/common/test_serialization.cpp)
+add_uik_test(test_logger            tests/common/test_logger.cpp)
+add_uik_test(test_integration       tests/integration/test_integration.cpp)
