@@ -12,6 +12,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
+# GCC 12 emits spurious -Warray-bounds and -Wstringop-overflow false positives
+# in Release builds when inlining std::vector copy through Tensor value types.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "13")
+    add_compile_options(-Wno-array-bounds -Wno-stringop-overflow)
+endif()
+
 # ── Library: core kernel ──
 add_library(uik_core
     src/world_model/latent_state.cpp
@@ -26,10 +32,17 @@ add_library(uik_core
     src/meta_evolution/archive.cpp
     src/meta_evolution/mutator.cpp
     src/meta_evolution/evolutionary_selector.cpp
+    src/meta_evolution/parameter_adapter.cpp
+    src/meta_evolution/self_modifier.cpp
+    src/meta_evolution/safety_guard.cpp
+    src/meta_evolution/interpreter.cpp
     src/agent/goal_setter.cpp
     src/agent/planner.cpp
     src/agent/agent_kernel.cpp
     src/agent/grid_world.cpp
+    src/agent/arc_env.cpp
+    src/agent/physics_env.cpp
+    src/agent/curriculum.cpp
 )
 target_include_directories(uik_core PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
@@ -58,9 +71,23 @@ function(add_uik_test TEST_NAME TEST_SRC)
     gtest_discover_tests(${TEST_NAME})
 endfunction()
 
-add_uik_test(test_world_model    tests/world_model/test_world_model.cpp)
-add_uik_test(test_symbolic        tests/symbolic_descent/test_symbolic_descent.cpp)
-add_uik_test(test_rule_library    tests/symbolic_descent/test_rule_library.cpp)
-add_uik_test(test_meta_evolution  tests/meta_evolution/test_meta_evolution.cpp)
-add_uik_test(test_agent           tests/agent/test_agent.cpp)
-add_uik_test(test_grid_world      tests/agent/test_grid_world.cpp)
+add_uik_test(test_world_model      tests/world_model/test_world_model.cpp)
+add_uik_test(test_symbolic          tests/symbolic_descent/test_symbolic_descent.cpp)
+add_uik_test(test_rule_library      tests/symbolic_descent/test_rule_library.cpp)
+add_uik_test(test_meta_evolution    tests/meta_evolution/test_meta_evolution.cpp)
+add_uik_test(test_param_adapter     tests/meta_evolution/test_parameter_adapter.cpp)
+add_uik_test(test_agent             tests/agent/test_agent.cpp)
+add_uik_test(test_grid_world        tests/agent/test_grid_world.cpp)
+add_uik_test(test_serialization     tests/common/test_serialization.cpp)
+add_uik_test(test_logger            tests/common/test_logger.cpp)
+add_uik_test(test_integration       tests/integration/test_integration.cpp)
+add_uik_test(test_self_modifier      tests/meta_evolution/test_self_modifier.cpp)
+add_uik_test(test_safety_guard       tests/meta_evolution/test_safety_guard.cpp)
+add_uik_test(test_interpreter        tests/meta_evolution/test_interpreter.cpp)
+add_uik_test(test_arc_env            tests/agent/test_arc_env.cpp)
+add_uik_test(test_physics_env        tests/agent/test_physics_env.cpp)
+add_uik_test(test_curriculum          tests/agent/test_curriculum.cpp)
+add_uik_test(test_extended_dsl       tests/symbolic_descent/test_extended_dsl.cpp)
+add_uik_test(test_guided_search      tests/symbolic_descent/test_guided_search.cpp)
+add_uik_test(test_v04_integration    tests/integration/test_v04_integration.cpp)
+add_uik_test(test_v05_gaps           tests/integration/test_v05_gaps.cpp)
