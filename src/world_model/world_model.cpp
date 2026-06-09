@@ -27,21 +27,36 @@ void WorldModel::update(const Observation& obs) {
     if (has_previous_) {
         State predicted = dynamics_.predict(last_state_, last_action_);
         Real error = dynamics_.prediction_error(predicted, current);
+
+        // Track compression progress: store previous average before updating
+        if (prediction_count_ > 0) {
+            prev_avg_error_ = cumulative_error_ / static_cast<Real>(prediction_count_);
+        }
         cumulative_error_ += error;
+        ++prediction_count_;
+
         dynamics_.learn(last_state_, last_action_, current, config_.learning_rate);
     }
 
     novelty_.observe(current);
     last_state_ = current;
+    has_previous_ = true;
     ++update_count_;
 }
 
+void WorldModel::record_action(const Action& action) {
+    last_action_ = action;
+}
+
 Real WorldModel::compression_progress() const {
-    if (update_count_ < 2) return 0.0;
-    // Compression progress = reduction in average prediction error
-    Real avg_current = cumulative_error_ / static_cast<Real>(update_count_);
-    Real avg_prev = prev_cumulative_error_ / static_cast<Real>(update_count_ - 1);
-    return std::max(0.0, avg_prev - avg_current);
+    if (prediction_count_ < 2) return 0.0;
+    Real current_avg = cumulative_error_ / static_cast<Real>(prediction_count_);
+    return std::max(0.0, prev_avg_error_ - current_avg);
+}
+
+Real WorldModel::prediction_error_rate() const {
+    if (prediction_count_ == 0) return 0.0;
+    return cumulative_error_ / static_cast<Real>(prediction_count_);
 }
 
 } // namespace uik::world_model

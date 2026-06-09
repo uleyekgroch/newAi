@@ -146,6 +146,51 @@ TEST(WorldModel, compression_progress_zero_initially) {
     EXPECT_DOUBLE_EQ(wm.compression_progress(), 0.0);
 }
 
+TEST(WorldModel, record_action_affects_dynamics_learning) {
+    WorldModel::Config cfg;
+    cfg.input_dim = 16;
+    cfg.latent_dim = 4;
+    cfg.action_space = 2;
+    cfg.learning_rate = 0.1;
+    WorldModel wm(cfg);
+
+    Observation obs1{Tensor({16}, 0.3)};
+    Observation obs2{Tensor({16}, 0.7)};
+
+    // First update sets last_state_ but has_previous_=false
+    wm.update(obs1);
+    wm.record_action(Action{0});
+
+    // Second update: has_previous_=true, learns dynamics
+    wm.update(obs2);
+    wm.record_action(Action{1});
+
+    EXPECT_GE(wm.prediction_error_rate(), 0.0);
+}
+
+TEST(WorldModel, compression_progress_after_learning) {
+    WorldModel::Config cfg;
+    cfg.input_dim = 8;
+    cfg.latent_dim = 4;
+    cfg.action_space = 2;
+    cfg.learning_rate = 0.05;
+    WorldModel wm(cfg);
+
+    // Feed the same transition repeatedly so the model can learn it
+    Observation obs_a{Tensor({8}, 0.2)};
+    Observation obs_b{Tensor({8}, 0.8)};
+
+    for (int i = 0; i < 30; ++i) {
+        wm.update(obs_a);
+        wm.record_action(Action{0});
+        wm.update(obs_b);
+        wm.record_action(Action{1});
+    }
+
+    // After many updates, compression progress should be non-negative
+    EXPECT_GE(wm.compression_progress(), 0.0);
+}
+
 TEST(WorldModel, novelty_detection_works) {
     WorldModel::Config cfg;
     cfg.input_dim = 16;

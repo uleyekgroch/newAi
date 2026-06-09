@@ -85,10 +85,21 @@ tests/
 - [x] AgentKernel implementation
 
 ### Phase 6: Integration & Verification
-- [x] main.cpp demo entry point
+- [x] main.cpp demo entry point (v0.1: 1D, v0.2: 2D GridWorld + 1D)
 - [x] Full build clean compile (zero warnings, -Wall -Wextra -Wpedantic -Werror)
-- [x] All 64 tests pass
-- [ ] PR creation
+- [x] All 88 tests pass
+- [x] PR creation
+
+### Phase 7: v0.2 Improvements
+- [x] Fix WorldModel compression_progress bug (prev_avg_error_ tracking)
+- [x] Fix WorldModel record_action (action properly fed back for dynamics learning)
+- [x] Add RuleLibrary (stores induced program rules, fitness-weighted, auto-prune) — 10 tests
+- [x] Wire SymbolicDescent into Agent loop (try_induce_rules from observation buffer)
+- [x] Wire MetaEvolution ↔ RuleLibrary (evolved programs feed back into rules, rules seed evolution)
+- [x] Add 2D GridWorld environment (5x5, 6 actions: noop/rotate/flipH/flipV/shift/increment) — 9 tests
+- [x] Agent fallback: select_action_from_evolved (novelty-seeking when plan is empty)
+- [x] Add .gitignore
+- [x] Update PR
 
 ## Design Decisions
 
@@ -97,3 +108,4 @@ tests/
 3. **Value semantics**: prefer value types; use std::variant for Program AST
 4. **Dependency injection**: all domains depend on interfaces, not concretions (DIP)
 5. **GoogleTest**: TDD with test-first for all domain logic
+6. **Closed-loop architecture**: SymbolicDescent induces rules → seeds MetaEvolution → evolved programs feed back into RuleLibrary → Agent uses rules for fallback decisions

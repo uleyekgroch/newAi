@@ -28,7 +28,9 @@ public:
     State predict_next(const State& current, const Action& action) override;
     Real  compute_novelty(const State& state) override;
     void  update(const Observation& obs) override;
+    void  record_action(const Action& action);
     Real  compression_progress() const override;
+    [[nodiscard]] Real prediction_error_rate() const;
 
 private:
     Config config_;
@@ -37,8 +39,9 @@ private:
     NoveltyDetector novelty_;
 
     Real cumulative_error_     = 0.0;
-    Real prev_cumulative_error_ = 0.0;
-    std::size_t update_count_  = 0;
+    Real prev_avg_error_        = 0.0;
+    std::size_t update_count_   = 0;
+    std::size_t prediction_count_ = 0;
 
     State last_state_;
     Action last_action_;

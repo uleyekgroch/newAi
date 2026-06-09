@@ -22,12 +22,14 @@ add_library(uik_core
     src/symbolic_descent/program_space.cpp
     src/symbolic_descent/mdl_evaluator.cpp
     src/symbolic_descent/search_engine.cpp
+    src/symbolic_descent/rule_library.cpp
     src/meta_evolution/archive.cpp
     src/meta_evolution/mutator.cpp
     src/meta_evolution/evolutionary_selector.cpp
     src/agent/goal_setter.cpp
     src/agent/planner.cpp
     src/agent/agent_kernel.cpp
+    src/agent/grid_world.cpp
 )
 target_include_directories(uik_core PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
@@ -56,7 +58,9 @@ function(add_uik_test TEST_NAME TEST_SRC)
     gtest_discover_tests(${TEST_NAME})
 endfunction()
 
-add_uik_test(test_world_model   tests/world_model/test_world_model.cpp)
-add_uik_test(test_symbolic       tests/symbolic_descent/test_symbolic_descent.cpp)
-add_uik_test(test_meta_evolution tests/meta_evolution/test_meta_evolution.cpp)
-add_uik_test(test_agent          tests/agent/test_agent.cpp)
+add_uik_test(test_world_model    tests/world_model/test_world_model.cpp)
+add_uik_test(test_symbolic        tests/symbolic_descent/test_symbolic_descent.cpp)
+add_uik_test(test_rule_library    tests/symbolic_descent/test_rule_library.cpp)
+add_uik_test(test_meta_evolution  tests/meta_evolution/test_meta_evolution.cpp)
+add_uik_test(test_agent           tests/agent/test_agent.cpp)
+add_uik_test(test_grid_world      tests/agent/test_grid_world.cpp)

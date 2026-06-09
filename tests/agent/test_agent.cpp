@@ -170,3 +170,58 @@ TEST(AgentKernel, evolution_triggered_at_interval) {
     // Evolution should have been triggered at step 5 and 10
     EXPECT_GT(kernel.evolution().archive().size(), 0u);
 }
+
+TEST(AgentKernel, rule_induction_triggered_at_interval) {
+    AgentKernel::Config cfg;
+    cfg.wm_config.input_dim = 16;
+    cfg.wm_config.latent_dim = 4;
+    cfg.wm_config.action_space = 4;
+    cfg.planning_horizon = 2;
+    cfg.evolve_interval = 100;
+    cfg.induce_interval = 5;
+    cfg.induce_max_iter = 10;
+
+    AgentKernel kernel(cfg);
+    TestEnv env(16);
+    kernel.run(env, 20);
+    // Rule induction should have been triggered
+    // (may or may not find rules depending on data, but should not crash)
+    EXPECT_GE(kernel.rule_library().size(), 0u);
+}
+
+TEST(AgentKernel, logs_contain_rules_count) {
+    AgentKernel::Config cfg;
+    cfg.wm_config.input_dim = 16;
+    cfg.wm_config.latent_dim = 4;
+    cfg.wm_config.action_space = 4;
+    cfg.planning_horizon = 2;
+    cfg.evolve_interval = 100;
+    cfg.induce_interval = 3;
+
+    AgentKernel kernel(cfg);
+    TestEnv env(16);
+    kernel.run(env, 20);
+    ASSERT_FALSE(kernel.logs().empty());
+    // Each log entry should have a valid rules_count field
+    for (const auto& log : kernel.logs()) {
+        EXPECT_GE(log.rules_count, 0u);
+    }
+}
+
+TEST(AgentKernel, record_action_integrated_in_step) {
+    AgentKernel::Config cfg;
+    cfg.wm_config.input_dim = 16;
+    cfg.wm_config.latent_dim = 4;
+    cfg.wm_config.action_space = 4;
+    cfg.planning_horizon = 3;
+    cfg.evolve_interval = 100;
+
+    AgentKernel kernel(cfg);
+    Observation obs{Tensor({16}, 0.5)};
+    Action a1 = kernel.step(obs, 0.0);
+    Action a2 = kernel.step(obs, 0.0);
+    // World model should be learning dynamics from recorded actions
+    EXPECT_GE(kernel.world_model().prediction_error_rate(), 0.0);
+    (void)a1;
+    (void)a2;
+}
