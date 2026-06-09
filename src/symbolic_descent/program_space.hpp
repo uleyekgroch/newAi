@@ -1,12 +1,15 @@
 #pragma once
 
+#include "common/types.hpp"
 #include "common/program.hpp"
 #include <random>
 #include <vector>
+#include <functional>
 
 namespace uik::symbolic_descent {
 
 // Manages the discrete program space: generation, mutation, crossover.
+// Supports guided search via type-aware mutations and analogy-based operators.
 class ProgramSpace {
 public:
     explicit ProgramSpace(int max_depth = 4, int color_range = 10,
@@ -18,6 +21,28 @@ public:
     [[nodiscard]] std::vector<ProgramPtr> neighborhood(const ProgramPtr& program,
                                                         std::size_t count = 10);
 
+    // Guided search operators (1e improvement)
+
+    // Type-aware mutation: only mutate to compatible op kinds
+    [[nodiscard]] ProgramPtr type_aware_mutate(const ProgramPtr& program);
+
+    // Analogy-based crossover: find structurally similar subtrees
+    [[nodiscard]] ProgramPtr analogy_crossover(const ProgramPtr& a,
+                                                const ProgramPtr& b);
+
+    // Guided neighborhood: biased toward promising mutation types
+    // Uses scores from previous evaluations to weight operator selection
+    [[nodiscard]] std::vector<ProgramPtr> guided_neighborhood(
+        const ProgramPtr& program,
+        const std::vector<Real>& op_weights,
+        std::size_t count = 10);
+
+    // Parameter-only perturbation: keep structure, tweak params
+    [[nodiscard]] ProgramPtr param_perturbation(const ProgramPtr& program);
+
+    // Simplification: try to reduce program without changing behavior
+    [[nodiscard]] ProgramPtr simplify(const ProgramPtr& program);
+
 private:
     int max_depth_;
     int color_range_;
@@ -28,6 +53,12 @@ private:
     [[nodiscard]] ProgramPtr random_primitive();
     [[nodiscard]] ProgramPtr replace_random_subtree(const ProgramPtr& program);
     [[nodiscard]] ProgramPtr pick_random_node(const ProgramPtr& program);
+
+    // Helper: get compatible op kinds for a given op
+    static std::vector<OpKind> compatible_ops(OpKind kind);
+
+    // Helper: count structure similarity
+    static Real structural_similarity(const ProgramPtr& a, const ProgramPtr& b);
 };
 
 } // namespace uik::symbolic_descent

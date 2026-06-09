@@ -130,7 +130,7 @@ void AgentKernel::try_induce_rules() {
         Real score = search_engine_.last_best_score();
         rule_library_.add_rule("transition", *result, score);
 
-        logger_.debug("rule_induced", {
+        logger_.info("rule_induced", {
             {"score", std::to_string(score)},
             {"total_rules", std::to_string(rule_library_.size())}
         });
@@ -202,10 +202,13 @@ void AgentKernel::try_self_modify(Real novelty, Real comp_progress,
     config_.goal_config.curiosity_weight = new_params.curiosity_weight;
     config_.goal_config.exploration_bonus = new_params.exploration_bonus;
 
+    // Apply adapted learning rate to world model
+    world_model_.set_learning_rate(new_params.learning_rate);
+
     // Recreate goal setter with adapted config
     goal_setter_ = GoalSetter(config_.goal_config);
 
-    logger_.debug("self_modify", {
+    logger_.info("self_modify", {
         {"lr", std::to_string(new_params.learning_rate)},
         {"explore", std::to_string(new_params.exploration_bonus)},
         {"curiosity", std::to_string(new_params.curiosity_weight)},

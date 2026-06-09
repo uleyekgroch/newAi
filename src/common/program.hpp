@@ -14,6 +14,7 @@ namespace uik {
 // Uses std::variant for type-safe sum type (C++20 pattern matching style).
 
 enum class OpKind {
+    // Grid transform primitives (Phase 1)
     Identity,     // no-op: return input
     Constant,     // produce a fixed value
     Rotate90,     // rotate grid 90°
@@ -24,6 +25,19 @@ enum class OpKind {
     MapColor,     // map one color to another
     Compose,      // sequential composition of two programs
     Conditional,  // if-then-else based on a predicate
+
+    // General computation primitives (Phase 3)
+    Add,          // elementwise addition (param1 = scalar offset)
+    Multiply,     // elementwise multiplication (param1 = scalar factor)
+    Modulo,       // elementwise modulo by param1
+    Threshold,    // if cell > param1: param2, else 0
+    Count,        // count occurrences of param1, broadcast result
+    Repeat,       // apply child[0] param1 times (loop)
+    Fold,         // reduce: apply child[0] across elements
+    Zip,          // combine two children elementwise
+    Filter,       // keep only elements matching param1
+    Store,        // variable store: save result to slot param1
+    Load,         // variable load: recall from slot param1
 };
 
 struct ProgramNode;
@@ -38,7 +52,12 @@ struct ProgramNode {
     [[nodiscard]] std::size_t description_length() const {
         std::size_t len = 1; // 1 for the opcode
         if (kind == OpKind::Translate || kind == OpKind::Fill ||
-            kind == OpKind::MapColor || kind == OpKind::Constant) {
+            kind == OpKind::MapColor || kind == OpKind::Constant ||
+            kind == OpKind::Add || kind == OpKind::Multiply ||
+            kind == OpKind::Modulo || kind == OpKind::Threshold ||
+            kind == OpKind::Count || kind == OpKind::Repeat ||
+            kind == OpKind::Filter || kind == OpKind::Store ||
+            kind == OpKind::Load) {
             len += 2; // params cost
         }
         for (const auto& child : children) {
@@ -98,6 +117,17 @@ private:
             case OpKind::MapColor:    return "MapCol";
             case OpKind::Compose:     return "Compose";
             case OpKind::Conditional: return "If";
+            case OpKind::Add:         return "Add";
+            case OpKind::Multiply:    return "Mul";
+            case OpKind::Modulo:      return "Mod";
+            case OpKind::Threshold:   return "Thresh";
+            case OpKind::Count:       return "Count";
+            case OpKind::Repeat:      return "Repeat";
+            case OpKind::Fold:        return "Fold";
+            case OpKind::Zip:         return "Zip";
+            case OpKind::Filter:      return "Filter";
+            case OpKind::Store:       return "Store";
+            case OpKind::Load:        return "Load";
         }
         return "?";
     }
@@ -121,6 +151,17 @@ private:
             case OpKind::MapColor:    return "MapCol";
             case OpKind::Compose:     return "Compose";
             case OpKind::Conditional: return "If";
+            case OpKind::Add:         return "Add";
+            case OpKind::Multiply:    return "Mul";
+            case OpKind::Modulo:      return "Mod";
+            case OpKind::Threshold:   return "Thresh";
+            case OpKind::Count:       return "Count";
+            case OpKind::Repeat:      return "Repeat";
+            case OpKind::Fold:        return "Fold";
+            case OpKind::Zip:         return "Zip";
+            case OpKind::Filter:      return "Filter";
+            case OpKind::Store:       return "Store";
+            case OpKind::Load:        return "Load";
         }
         return "?";
     };
@@ -162,6 +203,17 @@ private:
             if (n == "MapCol")  return OpKind::MapColor;
             if (n == "Compose") return OpKind::Compose;
             if (n == "If")      return OpKind::Conditional;
+            if (n == "Add")     return OpKind::Add;
+            if (n == "Mul")     return OpKind::Multiply;
+            if (n == "Mod")     return OpKind::Modulo;
+            if (n == "Thresh")  return OpKind::Threshold;
+            if (n == "Count")   return OpKind::Count;
+            if (n == "Repeat")  return OpKind::Repeat;
+            if (n == "Fold")    return OpKind::Fold;
+            if (n == "Zip")     return OpKind::Zip;
+            if (n == "Filter")  return OpKind::Filter;
+            if (n == "Store")   return OpKind::Store;
+            if (n == "Load")    return OpKind::Load;
             return OpKind::Identity;
         };
 

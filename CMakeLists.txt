@@ -33,10 +33,16 @@ add_library(uik_core
     src/meta_evolution/mutator.cpp
     src/meta_evolution/evolutionary_selector.cpp
     src/meta_evolution/parameter_adapter.cpp
+    src/meta_evolution/self_modifier.cpp
+    src/meta_evolution/safety_guard.cpp
+    src/meta_evolution/interpreter.cpp
     src/agent/goal_setter.cpp
     src/agent/planner.cpp
     src/agent/agent_kernel.cpp
     src/agent/grid_world.cpp
+    src/agent/arc_env.cpp
+    src/agent/physics_env.cpp
+    src/agent/curriculum.cpp
 )
 target_include_directories(uik_core PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
@@ -75,3 +81,12 @@ add_uik_test(test_grid_world        tests/agent/test_grid_world.cpp)
 add_uik_test(test_serialization     tests/common/test_serialization.cpp)
 add_uik_test(test_logger            tests/common/test_logger.cpp)
 add_uik_test(test_integration       tests/integration/test_integration.cpp)
+add_uik_test(test_self_modifier      tests/meta_evolution/test_self_modifier.cpp)
+add_uik_test(test_safety_guard       tests/meta_evolution/test_safety_guard.cpp)
+add_uik_test(test_interpreter        tests/meta_evolution/test_interpreter.cpp)
+add_uik_test(test_arc_env            tests/agent/test_arc_env.cpp)
+add_uik_test(test_physics_env        tests/agent/test_physics_env.cpp)
+add_uik_test(test_curriculum          tests/agent/test_curriculum.cpp)
+add_uik_test(test_extended_dsl       tests/symbolic_descent/test_extended_dsl.cpp)
+add_uik_test(test_guided_search      tests/symbolic_descent/test_guided_search.cpp)
+add_uik_test(test_v04_integration    tests/integration/test_v04_integration.cpp)

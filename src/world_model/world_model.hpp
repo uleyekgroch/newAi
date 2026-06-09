@@ -29,6 +29,7 @@ public:
     Real  compute_novelty(const State& state) override;
     void  update(const Observation& obs) override;
     void  record_action(const Action& action);
+    void  set_learning_rate(Real lr) { config_.learning_rate = lr; }
     Real  compression_progress() const override;
     [[nodiscard]] Real prediction_error_rate() const;
 
