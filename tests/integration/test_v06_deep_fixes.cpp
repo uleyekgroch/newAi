@@ -390,6 +390,89 @@ TEST(OpenEndedStructure, GeneratedStagesArePlayable) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// GoalSetter: Information-gain exploration & autonomous goals
+// ═══════════════════════════════════════════════════════════
+
+TEST(GoalSetter, InformationGainRewardUsesStatistics) {
+    GoalSetter::Config gc;
+    gc.info_gain_weight = 0.3;
+    gc.competence_weight = 0.2;
+    GoalSetter gs(gc);
+
+    // Feed some novelty values to build statistics
+    for (int i = 0; i < 10; ++i) {
+        Real novelty = 0.1 * i;
+        (void)gs.compute_reward(0.01, 0.0, novelty);
+    }
+
+    // Very high novelty should produce higher info-gain reward
+    Real low_info = gs.information_gain_reward(0.1, 0.01);
+    Real high_info = gs.information_gain_reward(2.0, 0.01);
+    EXPECT_GT(high_info, low_info);
+}
+
+TEST(GoalSetter, CompositeRewardIncludesAllComponents) {
+    GoalSetter::Config gc;
+    gc.curiosity_weight = 0.5;
+    gc.info_gain_weight = 0.3;
+    gc.competence_weight = 0.2;
+    GoalSetter gs(gc);
+
+    // First call builds baselines
+    (void)gs.compute_reward(0.0, 0.0, 0.0);
+    // Non-zero inputs should produce non-zero intrinsic reward
+    auto r2 = gs.compute_reward(1.0, 0.5, 0.5);
+    // External should be passed through
+    EXPECT_DOUBLE_EQ(r2.external, 0.5);
+}
+
+TEST(GoalSetter, LearningProgressMeasuresImprovement) {
+    GoalSetter::Config gc;
+    gc.progress_window = 6;
+    GoalSetter gs(gc);
+
+    // Feed decreasing compression → no positive progress
+    for (int i = 5; i >= 0; --i) {
+        (void)gs.compute_reward(0.1 * i, 0.0, 0.0);
+    }
+    Real lp_decrease = gs.learning_progress();
+
+    // Reset and feed increasing compression → positive progress
+    GoalSetter gs2(gc);
+    for (int i = 0; i < 6; ++i) {
+        (void)gs2.compute_reward(0.1 * i, 0.0, 0.0);
+    }
+    Real lp_increase = gs2.learning_progress();
+    EXPECT_GE(lp_increase, lp_decrease);
+}
+
+TEST(GoalSetter, AutonomousGoalDiscoveryUsesDirectionScores) {
+    GoalSetter::Config gc;
+    gc.progress_window = 5;
+    GoalSetter gs(gc);
+
+    // Build up state with clear learning progress
+    Tensor lat({4}, {0.1, 0.2, 0.3, 0.4});
+    State s1{lat};
+
+    // Feed increasing compression to create learning progress
+    for (int i = 0; i < 10; ++i) {
+        gs.set_goal(s1, 0.1 * i, 0.5);
+    }
+    // After enough calls, goal direction should be biased
+    State goal = gs.set_goal(s1, 1.0, 0.5);
+    EXPECT_EQ(goal.latent.flat_size(), 4u);
+    // Goal should differ from current state
+    bool differs = false;
+    for (Dim i = 0; i < 4; ++i) {
+        if (std::abs(goal.latent.at(i) - s1.latent.at(i)) > 1e-10) {
+            differs = true;
+        }
+    }
+    EXPECT_TRUE(differs);
+}
+
+// ═══════════════════════════════════════════════════════════
 // Integration: Full v0.6 system test
 // ═══════════════════════════════════════════════════════════
 
